@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hackathon Build-Off — Vote</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg1:#0f0c29; --bg2:#302b63; --bg3:#24243e;
+    --accent:#ffd166; --accent2:#06d6a0; --accent3:#ef476f; --accent4:#118ab2;
+    --card:#ffffff14; --card-border:#ffffff26; --text:#f5f7ff; --muted:#b9c0e0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    color:var(--text);
+    background:linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));
+    background-size:200% 200%;
+    animation:bgshift 18s ease infinite;
+    min-height:100vh; overflow-x:hidden;
+  }
+  @keyframes bgshift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .logo{font-size:38px;filter:drop-shadow(0 4px 10px #0008)}
+  h1{font-size:26px;letter-spacing:.3px;line-height:1.1}
+  h1 small{display:block;font-size:13px;font-weight:400;color:var(--muted);letter-spacing:.5px;margin-top:3px}
+  .nav{display:flex;gap:8px;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:5px}
+  .nav button{background:none;border:0;color:var(--muted);font-weight:600;font-size:14px;padding:9px 18px;border-radius:999px;cursor:pointer;transition:.2s}
+  .nav button.active{background:var(--accent);color:#241c00;box-shadow:0 6px 18px #ffd16655}
+  .nav button:hover:not(.active){color:#fff}
+  .view{display:none;animation:fade .4s ease}
+  .view.show{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .intro{text-align:center;padding:30px 0 14px}
+  .intro p{color:var(--muted);max-width:640px;margin:10px auto;font-size:15px;line-height:1.6}
+  .pill{display:inline-block;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--muted);margin:4px}
+
+  .namebox{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:18px 0 6px}
+  .namebox input{background:#ffffff1a;border:1px solid var(--card-border);color:#fff;border-radius:12px;padding:12px 16px;font-size:15px;min-width:260px;outline:none}
+  .namebox input:focus{border-color:var(--accent)}
+  .hint{text-align:center;color:var(--muted);font-size:13px;margin-bottom:8px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:18px}
+  .opt{position:relative;background:var(--card);border:1px solid var(--card-border);border-radius:18px;padding:18px;cursor:pointer;transition:transform .15s,border-color .2s,background .2s;overflow:hidden}
+  .opt:hover{transform:translateY(-3px);border-color:#ffffff55}
+  .opt .ico{font-size:30px}
+  .opt h3{font-size:16px;margin:8px 0 4px;line-height:1.25}
+  .opt p{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .opt .num{position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:50%;border:1px solid var(--card-border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted)}
+  .opt.picked{border-color:var(--accent);background:linear-gradient(135deg,#ffd16622,#06d6a022)}
+  .opt.picked .num{background:var(--accent);color:#241c00;border-color:var(--accent);font-weight:800;box-shadow:0 4px 14px #ffd16655}
+  .rankflag{position:absolute;top:0;left:0;padding:5px 12px 6px;font-size:11px;font-weight:800;letter-spacing:.4px;border-radius:18px 0 14px 0;display:none}
+  .opt.picked .rankflag{display:block}
+  .r1{background:linear-gradient(135deg,#ffd700,#ffb300);color:#3a2c00}
+  .r2{background:linear-gradient(135deg,#dfe6ff,#b6c2e0);color:#1c2440}
+  .r3{background:linear-gradient(135deg,#ffb27a,#e8804f);color:#3a1a00}
+
+  .submitbar{position:sticky;bottom:14px;margin-top:24px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:#1a1740cc;backdrop-filter:blur(10px);border:1px solid var(--card-border);border-radius:16px;padding:14px 18px}
+  .picks{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:14px}
+  .chip{background:#ffffff1a;border:1px solid var(--card-border);border-radius:999px;padding:5px 12px;font-size:13px}
+  .chip b{color:var(--accent)}
+  .btn{background:var(--accent2);color:#00211a;border:0;border-radius:12px;padding:12px 24px;font-size:15px;font-weight:800;cursor:pointer;transition:.2s;box-shadow:0 8px 22px #06d6a055}
+  .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+  .btn.ghost{background:#ffffff14;color:#fff;box-shadow:none;border:1px solid var(--card-border)}
+
+  .thanks{text-align:center;padding:60px 20px;animation:fade .4s}
+  .thanks .big{font-size:64px}
+  .thanks h2{font-size:30px;margin:14px 0 6px}
+  .thanks p{color:var(--muted);margin-bottom:22px}
+
+  .live{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--accent2);background:#06d6a01a;border:1px solid #06d6a04d;border-radius:999px;padding:5px 12px;margin-bottom:6px}
+  .live .dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 26px}
+  .stat{flex:1;min-width:140px;background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:16px 18px}
+  .stat .v{font-size:30px;font-weight:800;color:var(--accent)}
+  .stat .l{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+
+  .podium{display:flex;align-items:flex-end;justify-content:center;gap:18px;margin:10px 0 34px;min-height:230px}
+  .pod{width:200px;text-align:center}
+  .pod .medal{font-size:42px}
+  .pod .pname{font-size:14px;font-weight:700;margin:6px 0 8px;min-height:38px;display:flex;align-items:center;justify-content:center;line-height:1.2}
+  .pod .bar{border-radius:14px 14px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:10px;font-weight:800;font-size:20px;color:#1a1430;transition:height 1s cubic-bezier(.2,.8,.2,1)}
+  .pod.first .bar{background:linear-gradient(180deg,#ffd700,#ffae00)}
+  .pod.second .bar{background:linear-gradient(180deg,#e6ecff,#aab6da)}
+  .pod.third .bar{background:linear-gradient(180deg,#ffc093,#e8804f)}
+
+  .rows{display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:12px 16px}
+  .row .rk{font-size:16px;font-weight:800;color:var(--muted);width:28px;text-align:center}
+  .row .ic{font-size:24px}
+  .row .nm{flex:1;min-width:0}
+  .row .nm b{font-size:14.5px}
+  .row .nm .meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .track{height:14px;background:#ffffff14;border-radius:999px;overflow:hidden;margin-top:7px}
+  .fill{height:100%;border-radius:999px;width:0;transition:width 1.1s cubic-bezier(.2,.8,.2,1);background:linear-gradient(90deg,var(--accent4),var(--accent2),var(--accent))}
+  .row .pts{font-size:22px;font-weight:800;color:var(--accent);min-width:54px;text-align:right}
+
+  .sectionTitle{font-size:20px;margin:38px 0 4px;letter-spacing:.3px}
+  .assignWrap{display:none;background:linear-gradient(135deg,#118ab222,#06d6a01a);border:1px solid #06d6a04d;border-radius:18px;padding:18px 20px;margin:6px 0 26px;animation:fade .4s}
+  .assignWrap.open{display:block}
+  .assignHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}
+  .assignSummary{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+  .assignSummary .s{background:#ffffff14;border:1px solid var(--card-border);border-radius:999px;padding:6px 13px;font-size:13px}
+  .assignSummary .s b{color:var(--accent)}
+  .assignGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .acard{background:#ffffff10;border:1px solid var(--card-border);border-radius:14px;padding:12px 15px}
+  .acard.empty{opacity:.6;border-style:dashed}
+  .acard .ah{display:flex;align-items:center;gap:9px;font-weight:800;font-size:14.5px;margin-bottom:8px;line-height:1.2}
+  .acard .ah .ic{font-size:22px}
+  .assignee{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:5px 0}
+  .assignee .who{flex:1;font-weight:600}
+  .assignee .got{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;white-space:nowrap}
+  .got1{background:linear-gradient(135deg,#ffd700,#ffb300);color:#3a2c00}
+  .got2{background:linear-gradient(135deg,#dfe6ff,#b6c2e0);color:#1c2440}
+  .got3{background:linear-gradient(135deg,#ffb27a,#e8804f);color:#3a1a00}
+  .got0{background:#ffffff22;color:var(--muted)}
+  .acard .none{font-size:12.5px;color:var(--muted);font-style:italic}
+  .roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:14px}
+  .rcard{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px}
+  .rcard .rhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .rcard .rhead .ic{font-size:24px}
+  .rcard .rhead b{font-size:15px;flex:1;line-height:1.2}
+  .rcard .rhead .cnt{font-size:12px;color:var(--muted);background:#ffffff14;border:1px solid var(--card-border);border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .people{display:flex;flex-direction:column;gap:6px}
+  .person{display:flex;align-items:center;gap:8px;font-size:13.5px;background:#ffffff10;border-radius:8px;padding:6px 9px}
+  .person .who{flex:1}
+  .person .badge{font-size:11px;font-weight:800;border-radius:6px;padding:2px 7px}
+  .b1{background:linear-gradient(135deg,#ffd700,#ffb300);color:#3a2c00}
+  .b2{background:linear-gradient(135deg,#dfe6ff,#b6c2e0);color:#1c2440}
+  .b3{background:linear-gradient(135deg,#ffb27a,#e8804f);color:#3a1a00}
+  .nobody{color:var(--muted);font-size:13px;font-style:italic;padding:4px 2px}
+  .rcard.unclaimed{border-color:#ef476f55;background:#ef476f12}
+  .ballots{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px}
+  .ballot{background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:12px 14px}
+  .ballot .bn{font-weight:800;font-size:14.5px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .ballot ol{margin:0;padding-left:4px;list-style:none}
+  .ballot li{font-size:13px;padding:3px 0;display:flex;gap:7px;align-items:center}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:30px 0 0}
+  .toolbar .btn{font-size:13px;padding:10px 16px}
+  .empty{text-align:center;color:var(--muted);padding:50px 0}
+  footer{text-align:center;color:#8088b0;font-size:12px;margin-top:40px}
+  canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:50;display:none}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(40px);background:#06d6a0;color:#00211a;font-weight:700;padding:12px 22px;border-radius:12px;opacity:0;transition:.3s;z-index:60}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#ef476f;color:#fff}
+  .banner{display:none;background:#ef476f22;border:1px solid #ef476f66;color:#ffd9e2;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13.5px;text-align:center}
+  .banner.show{display:block}
+  .banner code{background:#0004;padding:1px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">🏆</div>
+      <h1>Hackathon Build-Off<small>Pick the app we build next — choose your top 3</small></h1>
+    </div>
+    <nav class="nav">
+      <button id="navVote" class="active" onclick="show('vote')">🗳️ Vote</button>
+      <button id="navResults" onclick="show('results')">📊 Results</button>
+    </nav>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <!-- ============ VOTE VIEW ============ -->
+  <section id="vote" class="view show">
+    <div class="intro">
+      <div class="pill">⏱️ Takes 30 seconds</div>
+      <div class="pill">🧑‍💻 Your picks help decide which app you'll build</div>
+      <p>Tap three cards in the order you'd most like to build them. Your <b>first</b> tap is your top choice. Tap a picked card again to clear it.</p>
+    </div>
+
+    <div class="namebox">
+      <input id="voterName" type="text" placeholder="Your name (required)" autocomplete="off" oninput="updatePicksLabel()">
+    </div>
+    <div class="hint">Your name is required — these picks decide who builds what, so we need to know whose vote this is.</div>
+
+    <div id="grid" class="grid"></div>
+
+    <div class="submitbar">
+      <div class="picks" id="picksLabel"><span class="chip">Pick your <b>3</b> favorites…</span></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn ghost" onclick="clearPicks()">Reset picks</button>
+        <button class="btn" id="submitBtn" disabled onclick="submitVote()">Cast my vote →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ THANKS VIEW ============ -->
+  <section id="thanks" class="view">
+    <div class="thanks">
+      <div class="big">🎉</div>
+      <h2>Vote locked in!</h2>
+      <p id="thanksMsg">Thanks for voting.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn" onclick="newVote()">Vote as someone else</button>
+        <button class="btn ghost" onclick="show('results')">See live results</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS VIEW ============ -->
+  <section id="results" class="view">
+    <div class="live"><span class="dot"></span> Live — updates the instant a vote lands</div>
+    <div class="stats" id="stats"></div>
+
+    <div class="assignWrap" id="assignWrap">
+      <div class="assignHead">
+        <h2 class="sectionTitle" style="margin:0">🎯 Suggested build assignments</h2>
+        <button class="btn ghost" style="font-size:12px;padding:7px 12px" onclick="document.getElementById('assignWrap').classList.remove('open')">✕ Hide</button>
+      </div>
+      <div class="hint" style="margin-bottom:8px">A conflict-free starting point — each person gets the highest-ranked app they could, with builders spread across different apps. Tweak by hand as you see fit.</div>
+      <div class="assignSummary" id="assignSummary"></div>
+      <div class="assignGrid" id="assignGrid"></div>
+    </div>
+
+    <div class="podium" id="podium"></div>
+    <div class="rows" id="rows"></div>
+
+    <h2 class="sectionTitle" id="rosterTitle" style="display:none">🧑‍💻 Who wants to build what</h2>
+    <div class="hint" id="rosterHint" style="display:none">Use this to assign builders — each name shows the rank that person gave the app (🥇/🥈/🥉). Spread people across apps so you don't get duplicates.</div>
+    <div class="roster" id="roster"></div>
+
+    <h2 class="sectionTitle" id="ballotTitle" style="display:none">📇 Each exec's ballot</h2>
+    <div class="ballots" id="ballots"></div>
+
+    <div class="toolbar">
+      <button class="btn" style="background:var(--accent4);color:#fff;box-shadow:0 8px 22px #118ab255" onclick="suggestAssignments()">🎯 Suggest assignments</button>
+      <button class="btn ghost" onclick="refreshNow(true)">🔄 Refresh now</button>
+      <button class="btn ghost" onclick="exportCSV()">📑 Export for spreadsheet (CSV)</button>
+    </div>
+    <footer>Votes are stored in your Supabase project and stream here live. To start a fresh round, clear the <code>votes</code> table in Supabase.</footer>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ========================================================================
+   CONFIG — paste your Supabase project values here (Settings ▸ API).
+   The anon/public key is safe to expose; row-level security guards the data.
+   ======================================================================== */
+const SUPABASE_URL      = "https://fgjrrcuboovkiabztgyg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_yVszMNBXTBrbQ2dfRveZLw_as-Ig1gb";
+/* ===================================================================== */
+
+const OPTIONS = [
+  {id:1, ico:"📊", name:"Executive Scorecard Analyzer", desc:"Auto-analyze exec scorecards to surface trends and outliers."},
+  {id:2, ico:"💰", name:"Monthly Finance Analyzer", desc:"Crunch monthly financials and explain what moved and why."},
+  {id:3, ico:"🔬", name:"Model QC Guardian", desc:"Quality-control checks upstream of the model to catch bad inputs."},
+  {id:4, ico:"🤝", name:"Better One-on-Ones", desc:"An app to make 1:1s more useful, prepared, and actionable."},
+  {id:5, ico:"🗺️", name:"Value Stream Atlas", desc:"Living repository of value streams, products & process maps."},
+  {id:6, ico:"🎓", name:"LDP App", desc:"Support and accelerate the Leadership Development Program."},
+  {id:7, ico:"📋", name:"DMS Meeting Evaluator", desc:"Score and improve daily management system meetings."},
+  {id:8, ico:"🎮", name:"DMS Learning Game", desc:"Gamified way to learn the daily management system."},
+  {id:9, ico:"🏭", name:"Lean Game", desc:"A hands-on game that teaches lean principles."},
+];
+const WEIGHTS=[3,2,1];
+
+let picks=[];
+let serverVotes=[];
+let lastRenderCount=-1;
+let sb=null;
+
+/* ---------- supabase wiring ---------- */
+function configured(){ return SUPABASE_URL.indexOf("YOUR-PROJECT")<0 && SUPABASE_ANON_KEY.indexOf("YOUR-ANON")<0; }
+function initSupabase(){
+  if(!configured()){
+    const b=document.getElementById('banner');
+    b.innerHTML='⚙️ Almost there — open <code>index.html</code> and paste your Supabase <code>URL</code> and <code>anon key</code> into the CONFIG block at the top of the script.';
+    b.classList.add('show');
+    return false;
+  }
+  sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // live: append each new vote the moment it is inserted
+  sb.channel('votes-stream')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'votes'},payload=>{
+      const r=payload.new;
+      serverVotes.push({name:r.name,picks:[r.pick1,r.pick2,r.pick3],t:new Date(r.created_at).getTime()});
+      if(document.getElementById('results').classList.contains('show')){lastRenderCount=serverVotes.length;renderResults(true);}
+    })
+    .subscribe();
+  return true;
+}
+function loadVotes(){return serverVotes;}
+async function fetchVotes(){
+  if(!sb)return;
+  const {data,error}=await sb.from('votes').select('name,pick1,pick2,pick3,created_at').order('created_at',{ascending:true});
+  if(error){toast('Could not load votes — check Supabase config',true);return;}
+  serverVotes=(data||[]).map(r=>({name:r.name,picks:[r.pick1,r.pick2,r.pick3],t:new Date(r.created_at).getTime()}));
+}
+
+/* ---------- nav ---------- */
+function show(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('show'));
+  document.getElementById(view).classList.add('show');
+  document.getElementById('navVote').classList.toggle('active',view==='vote');
+  document.getElementById('navResults').classList.toggle('active',view==='results');
+  if(view==='results') refreshNow(true);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ---------- voting grid ---------- */
+function renderGrid(){
+  const g=document.getElementById('grid');
+  g.innerHTML='';
+  OPTIONS.forEach(o=>{
+    const rank=picks.indexOf(o.id);
+    const picked=rank>-1;
+    const el=document.createElement('div');
+    el.className='opt'+(picked?' picked':'');
+    el.onclick=()=>togglePick(o.id);
+    el.innerHTML=`
+      <div class="rankflag ${picked?'r'+(rank+1):''}">${picked?['🥇 1ST CHOICE','🥈 2ND CHOICE','🥉 3RD CHOICE'][rank]:''}</div>
+      <div class="num">${picked?rank+1:''}</div>
+      <div class="ico">${o.ico}</div>
+      <h3>${o.name}</h3>
+      <p>${o.desc}</p>`;
+    g.appendChild(el);
+  });
+  updatePicksLabel();
+}
+function togglePick(id){
+  const i=picks.indexOf(id);
+  if(i>-1){picks.splice(i,1);}
+  else{ if(picks.length>=3){toast('You can only pick 3 — clear one first');return;} picks.push(id);}
+  renderGrid();
+}
+function clearPicks(){picks=[];renderGrid();}
+function updatePicksLabel(){
+  const lbl=document.getElementById('picksLabel');
+  if(picks.length===0){lbl.innerHTML='<span class="chip">Pick your <b>3</b> favorites…</span>';}
+  else{
+    lbl.innerHTML=picks.map((id,idx)=>{
+      const o=OPTIONS.find(x=>x.id===id);
+      return `<span class="chip"><b>${idx+1}.</b> ${o.ico} ${o.name}</span>`;
+    }).join('')+ (picks.length<3?`<span class="chip">${3-picks.length} more…</span>`:'');
+  }
+  const nameOk=(document.getElementById('voterName').value||'').trim().length>0;
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=!(picks.length===3 && nameOk);
+  btn.textContent = picks.length===3 && !nameOk ? 'Enter your name ↑' : 'Cast my vote →';
+}
+async function submitVote(){
+  const nm=(document.getElementById('voterName').value||'').trim();
+  if(picks.length!==3){return;}
+  if(!nm){toast('Please enter your name first');document.getElementById('voterName').focus();return;}
+  if(!sb){toast('Not connected to Supabase yet',true);return;}
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true; btn.textContent='Submitting…';
+  const sent=picks.slice();
+  const {error}=await sb.from('votes').insert({name:nm.slice(0,80),pick1:sent[0],pick2:sent[1],pick3:sent[2]});
+  if(error){
+    btn.disabled=false; updatePicksLabel();
+    toast('Submit failed — please try again',true);
+    return;
+  }
+  document.getElementById('thanksMsg').textContent=`Thanks, ${nm}! Your top 3 are counted.`;
+  picks=[];document.getElementById('voterName').value='';renderGrid();
+  show('thanks');burst();
+}
+function newVote(){show('vote');}
+
+/* ---------- live refresh ---------- */
+async function refreshNow(force){
+  await fetchVotes();
+  if(force || serverVotes.length!==lastRenderCount){lastRenderCount=serverVotes.length;renderResults(true);}
+}
+
+/* ---------- results ---------- */
+function tally(){
+  const votes=loadVotes();
+  const map={};OPTIONS.forEach(o=>map[o.id]={...o,pts:0,first:0,second:0,third:0,appear:0});
+  votes.forEach(v=>v.picks.forEach((id,idx)=>{
+    if(!map[id])return;
+    map[id].pts+=WEIGHTS[idx];map[id].appear++;
+    if(idx===0)map[id].first++;if(idx===1)map[id].second++;if(idx===2)map[id].third++;
+  }));
+  const arr=Object.values(map).sort((a,b)=>b.pts-a.pts||b.first-a.first||b.appear-a.appear);
+  return {votes,arr};
+}
+function renderResults(replay){
+  const {votes,arr}=tally();
+  const max=Math.max(1,...arr.map(a=>a.pts));
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="v">${votes.length}</div><div class="l">Execs voted</div></div>
+    <div class="stat"><div class="v">${votes.length*6}</div><div class="l">Points distributed</div></div>
+    <div class="stat"><div class="v">${arr[0]&&arr[0].pts?arr[0].ico:'—'}</div><div class="l">Current leader</div></div>
+    <div class="stat"><div class="v">9</div><div class="l">Apps in the running</div></div>`;
+
+  if(votes.length===0){
+    document.getElementById('podium').innerHTML='';
+    document.getElementById('rows').innerHTML='<div class="empty">No votes yet. Share the link and cast the first one!</div>';
+    ['rosterTitle','rosterHint','ballotTitle'].forEach(id=>document.getElementById(id).style.display='none');
+    document.getElementById('roster').innerHTML='';
+    document.getElementById('ballots').innerHTML='';
+    return;
+  }
+  ['rosterTitle','rosterHint','ballotTitle'].forEach(id=>document.getElementById(id).style.display='');
+
+  const top=arr.slice(0,3);
+  buildPodium(top,max);
+
+  document.getElementById('rows').innerHTML=arr.map((o,i)=>`
+    <div class="row">
+      <div class="rk">${i+1}</div>
+      <div class="ic">${o.ico}</div>
+      <div class="nm">
+        <b>${o.name}</b>
+        <div class="meta">🥇 ${o.first} · 🥈 ${o.second} · 🥉 ${o.third} &nbsp;·&nbsp; on ${o.appear} ballot${o.appear===1?'':'s'}</div>
+        <div class="track"><div class="fill" data-w="${(o.pts/max*100).toFixed(1)}"></div></div>
+      </div>
+      <div class="pts">${o.pts}</div>
+    </div>`).join('');
+
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.fill').forEach(f=>{f.style.width='0';requestAnimationFrame(()=>f.style.width=f.dataset.w+'%');});
+  });
+
+  const byApp={};OPTIONS.forEach(o=>byApp[o.id]=[]);
+  votes.forEach(v=>v.picks.forEach((id,idx)=>{if(byApp[id])byApp[id].push({name:v.name,rank:idx});}));
+  document.getElementById('roster').innerHTML=arr.map(o=>{
+    const people=byApp[o.id].sort((a,b)=>a.rank-b.rank);
+    const badge=['🥇','🥈','🥉'],bcl=['b1','b2','b3'];
+    const inner=people.length
+      ? `<div class="people">${people.map(p=>`<div class="person"><span class="who">${esc(p.name)}</span><span class="badge ${bcl[p.rank]}">${badge[p.rank]} #${p.rank+1}</span></div>`).join('')}</div>`
+      : `<div class="nobody">— nobody has picked this yet —</div>`;
+    return `<div class="rcard${people.length?'':' unclaimed'}">
+      <div class="rhead"><span class="ic">${o.ico}</span><b>${o.name}</b><span class="cnt">${people.length} pick${people.length===1?'':'s'}</span></div>
+      ${inner}</div>`;
+  }).join('');
+
+  const sortedVoters=[...votes].sort((a,b)=>a.name.localeCompare(b.name));
+  document.getElementById('ballots').innerHTML=sortedVoters.map(v=>{
+    const badge=['🥇','🥈','🥉'];
+    return `<div class="ballot">
+      <div class="bn">🧑 ${esc(v.name)}</div>
+      <ol>${v.picks.map((id,idx)=>{const o=OPTIONS.find(x=>x.id===id);return `<li>${badge[idx]} ${o?o.ico:''} ${o?esc(o.name):'?'}</li>`;}).join('')}</ol>
+    </div>`;
+  }).join('');
+
+  if(replay && arr[0].pts>0) setTimeout(burst,500);
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- assignment optimizer (Hungarian min-cost matching) ---------- */
+function hungarian(cost){
+  const INF=1e9, n=cost.length, m=cost[0].length;
+  const u=Array(n+1).fill(0), v=Array(m+1).fill(0), p=Array(m+1).fill(0), way=Array(m+1).fill(0);
+  for(let i=1;i<=n;i++){
+    p[0]=i; let j0=0;
+    const minv=Array(m+1).fill(INF), used=Array(m+1).fill(false);
+    do{
+      used[j0]=true; const i0=p[j0]; let delta=INF, j1=-1;
+      for(let j=1;j<=m;j++) if(!used[j]){
+        const cur=cost[i0-1][j-1]-u[i0]-v[j];
+        if(cur<minv[j]){minv[j]=cur;way[j]=j0;}
+        if(minv[j]<delta){delta=minv[j];j1=j;}
+      }
+      for(let j=0;j<=m;j++){ if(used[j]){u[p[j]]+=delta;v[j]-=delta;} else minv[j]-=delta; }
+      j0=j1;
+    }while(p[j0]!==0);
+    do{const j1=way[j0];p[j0]=p[j1];j0=j1;}while(j0);
+  }
+  const res=Array(n).fill(-1);
+  for(let j=1;j<=m;j++) if(p[j]>0&&p[j]<=n) res[p[j]-1]=j-1;
+  return res;
+}
+function suggestAssignments(){
+  const votes=loadVotes();
+  if(votes.length===0){toast('No votes to assign yet');return;}
+  const n=votes.length;
+  const base=Math.floor(n/OPTIONS.length);
+  const cap=base+1;
+  const colApp=[];
+  OPTIONS.forEach(o=>{for(let k=0;k<cap;k++)colApp.push({id:o.id,slot:k});});
+  const RANK=[0,3,6];
+  const UNWANTED=30, SPREAD=12;
+  const cost=votes.map(v=>colApp.map(c=>{
+    const r=v.picks.indexOf(c.id);
+    const b=r===-1?UNWANTED:RANK[r];
+    return b + c.slot*SPREAD;
+  }));
+  const assign=hungarian(cost);
+  const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
+  const tallyGot=[0,0,0,0];
+  votes.forEach((v,i)=>{
+    const appId=colApp[assign[i]].id;
+    const rank=v.picks.indexOf(appId);
+    perApp[appId].push({name:v.name,rank});
+    tallyGot[rank===-1?0:rank+1]++;
+  });
+  document.getElementById('assignSummary').innerHTML=`
+    <div class="s"><b>${n}</b> builders placed</div>
+    <div class="s">🥇 got 1st: <b>${tallyGot[1]}</b></div>
+    <div class="s">🥈 got 2nd: <b>${tallyGot[2]}</b></div>
+    <div class="s">🥉 got 3rd: <b>${tallyGot[3]}</b></div>
+    ${tallyGot[0]?`<div class="s">↪️ off-ballot: <b>${tallyGot[0]}</b></div>`:''}
+    <div class="s">apps used: <b>${OPTIONS.filter(o=>perApp[o.id].length).length}</b>/9</div>`;
+  const gotCls=['got0','got1','got2','got3'];
+  const gotLbl=r=>r===-1?'↪️ off-ballot':['🥇 their #1','🥈 their #2','🥉 their #3'][r];
+  document.getElementById('assignGrid').innerHTML=OPTIONS.map(o=>{
+    const ppl=perApp[o.id].sort((a,b)=>a.rank-b.rank);
+    return `<div class="acard${ppl.length?'':' empty'}">
+      <div class="ah"><span class="ic">${o.ico}</span>${o.name}</div>
+      ${ppl.length? ppl.map(p=>`<div class="assignee"><span class="who">${esc(p.name)}</span><span class="got ${gotCls[p.rank+1]}">${gotLbl(p.rank)}</span></div>`).join('')
+        : '<div class="none">— no builder assigned —</div>'}
+    </div>`;
+  }).join('');
+  document.getElementById('assignWrap').classList.add('open');
+  document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
+  toast('Assignments suggested for '+n+' builders');
+}
+function buildPodium(top,max){
+  const podium=document.getElementById('podium');
+  if(top.length===0){podium.innerHTML='';return;}
+  const slots=[{o:top[1],cls:'second',medal:'🥈',h:155},{o:top[0],cls:'first',medal:'🥇',h:215},{o:top[2],cls:'third',medal:'🥉',h:125}];
+  podium.innerHTML=slots.filter(s=>s.o).map(s=>`
+    <div class="pod ${s.cls}">
+      <div class="medal">${s.medal}</div>
+      <div class="pname">${s.o.ico} ${s.o.name}</div>
+      <div class="bar" style="height:0px" data-h="${s.o.pts>0?s.h:40}">${s.o.pts}</div>
+    </div>`).join('');
+  requestAnimationFrame(()=>{
+    podium.querySelectorAll('.bar').forEach(b=>{requestAnimationFrame(()=>b.style.height=b.dataset.h+'px');});
+  });
+}
+
+/* ---------- CSV export ---------- */
+function exportCSV(){
+  const votes=loadVotes();
+  if(!votes.length){toast('No votes to export yet');return;}
+  const nm=id=>{const o=OPTIONS.find(x=>x.id===id);return o?o.name:id;};
+  const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+  const lines=['Name,1st choice,2nd choice,3rd choice'];
+  [...votes].sort((a,b)=>a.name.localeCompare(b.name)).forEach(v=>{
+    lines.push([q(v.name),q(nm(v.picks[0])),q(nm(v.picks[1])),q(nm(v.picks[2]))].join(','));
+  });
+  const blob=new Blob([lines.join('\r\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hackathon-votes.csv';a.click();
+  toast('Exported CSV for '+votes.length+' voters');
+}
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg,isErr){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(isErr?' err':'');clearTimeout(toastT);toastT=setTimeout(()=>t.className='toast',2600);}
+
+/* ---------- confetti ---------- */
+function burst(){
+  const c=document.getElementById('confetti'),x=c.getContext('2d');
+  c.style.display='block';c.width=innerWidth;c.height=innerHeight;
+  const colors=['#ffd166','#06d6a0','#ef476f','#118ab2','#fff'];
+  const P=Array.from({length:160},()=>({x:Math.random()*c.width,y:-20-Math.random()*c.height*.3,r:6+Math.random()*8,vy:3+Math.random()*5,vx:-2+Math.random()*4,col:colors[Math.floor(Math.random()*colors.length)],rot:Math.random()*6,vr:-.2+Math.random()*.4}));
+  let frames=0;
+  (function anim(){
+    frames++;x.clearRect(0,0,c.width,c.height);
+    P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr;p.vy+=.04;
+      x.save();x.translate(p.x,p.y);x.rotate(p.rot);x.fillStyle=p.col;x.fillRect(-p.r/2,-p.r/2,p.r,p.r*.6);x.restore();});
+    if(frames<150)requestAnimationFrame(anim);else c.style.display='none';
+  })();
+}
+
+/* ---------- init ---------- */
+document.getElementById('voterName').addEventListener('keydown',e=>{if(e.key==='Enter'&&picks.length===3)submitVote();});
+renderGrid();
+if(initSupabase()){ fetchVotes(); }
+</script>
+</body>
+</html>
