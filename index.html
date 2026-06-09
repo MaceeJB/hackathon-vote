@@ -207,6 +207,22 @@
     </div>
   </section>
 
+  <!-- ============ LOCK VIEW ============ -->
+  <section id="lock" class="view">
+    <div class="thanks">
+      <div class="big">🔒</div>
+      <h2>Results are locked</h2>
+      <p>The live results are shown by the host. Enter the passcode to view them.</p>
+      <div class="namebox">
+        <input id="lockInput" type="password" placeholder="Passcode" autocomplete="off" onkeydown="if(event.key==='Enter')tryUnlock()">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn" onclick="tryUnlock()">Unlock results →</button>
+        <button class="btn ghost" onclick="show('vote')">← Back to voting</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ RESULTS VIEW ============ -->
   <section id="results" class="view">
     <div class="live"><span class="dot"></span> Live — updates the instant a vote lands</div>
@@ -269,6 +285,22 @@ let serverVotes=[];
 let lastRenderCount=-1;
 let sb=null;
 
+/* Host passcode to view the Results tab. Change the word in quotes to set your own. */
+const RESULTS_PASSCODE="bunker";
+let resultsUnlocked=false;
+try{ if(localStorage.getItem('ai_bunker_unlocked')==='1') resultsUnlocked=true; }catch(e){}
+function tryUnlock(){
+  const val=(document.getElementById('lockInput').value||'').trim().toLowerCase();
+  if(val===RESULTS_PASSCODE){
+    resultsUnlocked=true;
+    try{localStorage.setItem('ai_bunker_unlocked','1');}catch(e){}
+    document.getElementById('lockInput').value='';
+    show('results');
+  }else{
+    toast('Incorrect passcode',true);
+  }
+}
+
 /* ---------- supabase wiring ---------- */
 function configured(){ return SUPABASE_URL.indexOf("YOUR-PROJECT")<0 && SUPABASE_ANON_KEY.indexOf("YOUR-ANON")<0; }
 function initSupabase(){
@@ -299,6 +331,16 @@ async function fetchVotes(){
 
 /* ---------- nav ---------- */
 function show(view){
+  // gate the Results tab behind the host passcode
+  if(view==='results' && !resultsUnlocked){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('show'));
+    document.getElementById('lock').classList.add('show');
+    document.getElementById('navVote').classList.remove('active');
+    document.getElementById('navResults').classList.add('active');
+    setTimeout(()=>{const i=document.getElementById('lockInput');if(i)i.focus();},80);
+    window.scrollTo({top:0,behavior:'smooth'});
+    return;
+  }
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('show'));
   document.getElementById(view).classList.add('show');
   document.getElementById('navVote').classList.toggle('active',view==='vote');
