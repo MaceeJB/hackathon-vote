@@ -125,6 +125,10 @@
   .teamtag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;white-space:nowrap;margin-left:6px}
   .teamtag.ok{background:#06d6a033;color:#06d6a0}
   .teamtag.bad{background:#ef476f33;color:#ff6b93}
+  .mailBtn{background:#ffffff10;border:1px solid var(--card-border);border-radius:7px;padding:3px 7px;font-size:12px;cursor:pointer;line-height:1}
+  .mailBtn:hover{border-color:var(--accent);background:#ffffff1e}
+  .notifyBar{display:none;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;padding-top:14px;border-top:1px solid var(--card-border)}
+  .notifyBar .notifyLbl{font-weight:700;font-size:13.5px;margin-right:2px}
   .acard .none{font-size:12.5px;color:var(--muted);font-style:italic}
   .roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:14px}
   .rcard{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px}
@@ -244,6 +248,13 @@
       <div class="hint" style="margin-bottom:8px">Everyone starts on their 🥇 or 🥈 pick, in teams of 2–3. <b>To move someone</b>, use the dropdown next to their name — each app shows their rank for it (🥇/🥈/🥉), and the team-size and pick tallies update live. <b>↺ Reset</b> restores the suggested plan.</div>
       <div class="assignSummary" id="assignSummary"></div>
       <div class="assignGrid" id="assignGrid"></div>
+      <div class="notifyBar" id="notifyBar">
+        <span class="notifyLbl">📣 Notify the team:</span>
+        <button class="btn" style="font-size:12.5px;padding:8px 13px" onclick="copyAssignments()">📋 Copy assignments</button>
+        <button class="btn" style="font-size:12.5px;padding:8px 13px" onclick="emailAllAssignments()">✉️ Email via Outlook</button>
+        <button class="btn" style="font-size:12.5px;padding:8px 13px" onclick="teamsAssignments()">💬 Open in Teams</button>
+        <span class="hint" style="flex-basis:100%;margin:2px 0 0">Reflects your current plan, including any edits above. Paste-ready for an Outlook email or a Teams channel — recipients aren't pre-filled since votes are name-only. Use the ✉️ by each name to email one person.</span>
+      </div>
     </div>
 
     <div class="podium" id="podium"></div>
@@ -543,12 +554,14 @@ function suggestAssignments(){
     document.getElementById('assignSummary').innerHTML=
       `<div class="s">⚠️ Can't place ${n} builders into teams of ${MIN}–${MAX} on just 9 apps — too many people, or not enough overlapping picks.</div>`;
     document.getElementById('assignGrid').innerHTML='';
+    document.getElementById('notifyBar').style.display='none';
     document.getElementById('assignWrap').classList.add('open');
     document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
     return;
   }
   ASSIGN_STATE={votes, appOf:best.slice()};
   renderAssignments();
+  document.getElementById('notifyBar').style.display='flex';
   document.getElementById('assignWrap').classList.add('open');
   document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
   toast('Suggested a plan for '+n+' builders — use the dropdowns to adjust');
@@ -604,10 +617,65 @@ function renderAssignments(){
           <select class="moveSel" title="Move ${esc(p.name)} to another app" onchange="moveAssignee(${p.i}, +this.value)">
             ${OPTIONS.map(a=>`<option value="${a.id}" ${a.id===o.id?'selected':''}>${a.name} ${rankTag(p.picks.indexOf(a.id))}</option>`).join('')}
           </select>
+          <button class="mailBtn" title="Email ${esc(p.name)} their assignment via Outlook" onclick="emailPerson(${p.i})">✉️</button>
         </div>`).join('')
         : '<div class="none">— not building —</div>'}
     </div>`;
   }).join('');
+}
+/* ---------- notify the team (Outlook + Teams) ---------- */
+// Plain-text announcement of the CURRENT plan (honors any hand edits).
+function assignmentText(){
+  if(!ASSIGN_STATE) return '';
+  const {votes, appOf}=ASSIGN_STATE;
+  const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
+  votes.forEach((v,i)=>perApp[appOf[i]].push({name:v.name, rank:v.picks.indexOf(appOf[i])}));
+  const built=OPTIONS.filter(o=>perApp[o.id].length);
+  const out=['Hackathon Build-Off — team assignments',''];
+  built.forEach(o=>{
+    const ppl=perApp[o.id].sort((a,b)=>a.rank-b.rank);
+    out.push(`${o.name} (${ppl.length} builder${ppl.length>1?'s':''}): ${ppl.map(p=>p.name).join(', ')}`);
+  });
+  out.push('', `${built.length} teams — let's build!`);
+  return out.join('\n');
+}
+function fallbackCopy(text,done){
+  const ta=document.createElement('textarea'); ta.value=text;
+  ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta);
+  ta.focus(); ta.select(); try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta); if(done)done();
+}
+function copyToClipboard(text,okMsg){
+  const done=()=>toast(okMsg||'Copied');
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done));
+  else fallbackCopy(text,done);
+}
+function copyAssignments(){
+  if(!ASSIGN_STATE){toast('Suggest assignments first');return;}
+  copyToClipboard(assignmentText(),'Copied — paste into a Teams channel or Outlook email');
+}
+function emailAllAssignments(){
+  if(!ASSIGN_STATE){toast('Suggest assignments first');return;}
+  window.location.href='mailto:?subject='+encodeURIComponent('Hackathon Build-Off — team assignments')
+    +'&body='+encodeURIComponent(assignmentText());
+}
+function teamsAssignments(){
+  if(!ASSIGN_STATE){toast('Suggest assignments first');return;}
+  // Opens a Teams message composer with the announcement pre-filled; pick the channel/people to send to.
+  window.open('https://teams.microsoft.com/l/chat/0/0?users=&message='+encodeURIComponent(assignmentText()),'_blank');
+}
+// Personalized Outlook email for a single builder (their app + teammates).
+function emailPerson(voteIdx){
+  if(!ASSIGN_STATE) return;
+  const {votes, appOf}=ASSIGN_STATE, v=votes[voteIdx], appId=appOf[voteIdx];
+  const app=OPTIONS.find(o=>o.id===appId);
+  const mates=votes.filter((x,i)=>appOf[i]===appId && i!==voteIdx).map(x=>x.name);
+  const subject='Your Hackathon Build-Off assignment: '+app.name;
+  const body='Hi '+v.name+",\n\nYou're building "+app.name+' for the Hackathon Build-Off.'
+    +(mates.length?'\n\nYour teammates: '+mates.join(', ')+'.':'')
+    +"\n\nLet's go!";
+  window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 }
 function buildPodium(top,max){
   const podium=document.getElementById('podium');
