@@ -233,7 +233,7 @@
         <h2 class="sectionTitle" style="margin:0">🎯 Suggested build assignments</h2>
         <button class="btn ghost" style="font-size:12px;padding:7px 12px" onclick="document.getElementById('assignWrap').classList.remove('open')">✕ Hide</button>
       </div>
-      <div class="hint" style="margin-bottom:8px">A starting point that gives as many people as possible their 🥇 or 🥈 pick — apps can end up with several builders or none. Tweak by hand as you see fit.</div>
+      <div class="hint" style="margin-bottom:8px">Everyone is placed on their 🥇 or 🥈 pick, in teams of 2–3 builders. Some apps won't get built — that's expected. Tweak by hand as you see fit.</div>
       <div class="assignSummary" id="assignSummary"></div>
       <div class="assignGrid" id="assignGrid"></div>
     </div>
@@ -492,76 +492,82 @@ function renderResults(replay){
 }
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-/* ---------- assignment optimizer (Hungarian min-cost matching) ---------- */
-function hungarian(cost){
-  const INF=1e9, n=cost.length, m=cost[0].length;
-  const u=Array(n+1).fill(0), v=Array(m+1).fill(0), p=Array(m+1).fill(0), way=Array(m+1).fill(0);
-  for(let i=1;i<=n;i++){
-    p[0]=i; let j0=0;
-    const minv=Array(m+1).fill(INF), used=Array(m+1).fill(false);
-    do{
-      used[j0]=true; const i0=p[j0]; let delta=INF, j1=-1;
-      for(let j=1;j<=m;j++) if(!used[j]){
-        const cur=cost[i0-1][j-1]-u[i0]-v[j];
-        if(cur<minv[j]){minv[j]=cur;way[j]=j0;}
-        if(minv[j]<delta){delta=minv[j];j1=j;}
-      }
-      for(let j=0;j<=m;j++){ if(used[j]){u[p[j]]+=delta;v[j]-=delta;} else minv[j]-=delta; }
-      j0=j1;
-    }while(p[j0]!==0);
-    do{const j1=way[j0];p[j0]=p[j1];j0=j1;}while(j0);
-  }
-  const res=Array(n).fill(-1);
-  for(let j=1;j<=m;j++) if(p[j]>0&&p[j]<=n) res[p[j]-1]=j-1;
-  return res;
-}
+/* ---------- assignment optimizer (constrained: 1st/2nd choice, teams of 2–3) ---------- */
 function suggestAssignments(){
   const votes=loadVotes();
   if(votes.length===0){toast('No votes to assign yet');return;}
   const n=votes.length;
-  // Coverage is no longer forced: give each app enough slots to take everyone,
-  // so we never push someone to a worse choice just to fill an empty app.
-  const cap=n;
-  const colApp=[];
-  OPTIONS.forEach(o=>{for(let k=0;k<cap;k++)colApp.push({id:o.id,slot:k});});
-  // Priority: everyone's 1st or 2nd choice. Big gaps before 3rd/off-ballot make
-  // rank the thing we minimize first; spreading is only a tie-breaker now.
-  const RANK=[0,1,20];   // 1st, 2nd, 3rd
-  const UNWANTED=400;    // not on their ballot at all — last resort
-  // M is larger than any possible total spread penalty (max sum of slots = n(n-1)/2 < n²),
-  // so rank cost always dominates and slot only breaks ties among equal-rank solutions.
-  const M=n*n+1;
-  const cost=votes.map(v=>colApp.map(c=>{
-    const r=v.picks.indexOf(c.id);
-    const b=r===-1?UNWANTED:RANK[r];
-    return b*M + c.slot;
-  }));
-  const assign=hungarian(cost);
+  const MIN=2, MAX=3;        // every app that gets built has 2–3 builders…
+  const PENALTY=1000;        // …and everyone should land on their 1st or 2nd pick.
+
+  // Each builder may only be placed on a pick they ranked. We prefer their 1st
+  // (cost 0) over their 2nd (cost 1). Falling to a 3rd pick, or leaving an app with
+  // a lone builder, each costs PENALTY — far more than any number of 2nd picks — so
+  // the search resorts to them ONLY if the rules can't otherwise be satisfied, and
+  // then as few times as possible. Unbuilt apps (0 builders) are always fine.
+  const rankCost=[0,1,PENALTY];                 // 1st, 2nd, 3rd choice
+  const cand=votes.map(v=>v.picks.slice(0,3));  // candidate app ids per person
+
+  // Branch & bound over builders. counts[appId] = how many placed there so far.
+  // Hard rule: never exceed MAX on any app. Soft (penalised) rule: an app left with
+  // exactly 1 builder. We keep the lowest-cost complete assignment found.
+  const counts={}, chosen=new Array(n);
+  let best=null, bestCost=Infinity, nodes=0; const NODE_CAP=4000000;
+  const finalPenalty=()=>{ let p=0; for(const id in counts){ const c=counts[id]; if(c>0&&c<MIN)p+=PENALTY; } return p; };
+  function search(i,cost){
+    if(cost>=bestCost||nodes>NODE_CAP) return;          // bound / safety cap
+    if(i===n){ const t=cost+finalPenalty(); if(t<bestCost){bestCost=t;best=chosen.slice();} return; }
+    nodes++;
+    for(let r=0;r<3;r++){
+      const app=cand[i][r];
+      const c=counts[app]||0;
+      if(c>=MAX) continue;                               // never more than 3 on an app
+      counts[app]=c+1; chosen[i]=app;
+      search(i+1, cost+rankCost[r]);
+      counts[app]=c;
+    }
+  }
+  search(0,0);
+
   const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
-  const tallyGot=[0,0,0,0];
-  votes.forEach((v,i)=>{
-    const appId=colApp[assign[i]].id;
-    const rank=v.picks.indexOf(appId);
+  const tallyGot=[0,0,0,0];                              // [off,1st,2nd,3rd]; off stays 0 here
+  if(best) votes.forEach((v,i)=>{
+    const appId=best[i], rank=v.picks.indexOf(appId);
     perApp[appId].push({name:v.name,rank});
-    tallyGot[rank===-1?0:rank+1]++;
+    tallyGot[rank+1]++;
   });
+
+  if(!best){
+    document.getElementById('assignSummary').innerHTML=
+      `<div class="s">⚠️ Can't place ${n} builders into teams of ${MIN}–${MAX} on just 9 apps — too many people, or not enough overlapping picks.</div>`;
+    document.getElementById('assignGrid').innerHTML='';
+    document.getElementById('assignWrap').classList.add('open');
+    document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+
+  const builtIds=OPTIONS.filter(o=>perApp[o.id].length).map(o=>o.id);
   const top2=tallyGot[1]+tallyGot[2];
-  const pct=Math.round(top2/n*100);
+  const undersized=builtIds.filter(id=>perApp[id].length<MIN).length;
+  const thirds=tallyGot[3];
+  const allGood = undersized===0 && thirds===0;
   document.getElementById('assignSummary').innerHTML=`
-    <div class="s"><b>${top2}</b>/${n} got their 🥇 or 🥈 (<b>${pct}%</b>)</div>
+    <div class="s">${allGood?'✅ everyone on their 🥇 or 🥈':'⚠️ best possible (some rules bent)'}</div>
     <div class="s">🥇 got 1st: <b>${tallyGot[1]}</b></div>
     <div class="s">🥈 got 2nd: <b>${tallyGot[2]}</b></div>
-    <div class="s">🥉 got 3rd: <b>${tallyGot[3]}</b></div>
-    ${tallyGot[0]?`<div class="s">↪️ off-ballot: <b>${tallyGot[0]}</b></div>`:''}
-    <div class="s">apps covered: <b>${OPTIONS.filter(o=>perApp[o.id].length).length}</b>/9 <span style="opacity:.6">(coverage is secondary)</span></div>`;
+    <div class="s"><b>${builtIds.length}</b> apps building · teams of ${MIN}–${MAX}</div>
+    ${thirds?`<div class="s">⚠️ had to use 🥉 3rd pick: <b>${thirds}</b></div>`:''}
+    ${undersized?`<div class="s">⚠️ teams under ${MIN}: <b>${undersized}</b></div>`:''}`;
   const gotCls=['got0','got1','got2','got3'];
-  const gotLbl=r=>r===-1?'↪️ off-ballot':['🥇 their #1','🥈 their #2','🥉 their #3'][r];
-  document.getElementById('assignGrid').innerHTML=OPTIONS.map(o=>{
+  const gotLbl=r=>['🥇 their #1','🥈 their #2','🥉 their #3'][r];
+  // Show apps being built first (largest teams first), unbuilt apps last.
+  const ordered=[...OPTIONS].sort((a,b)=>perApp[b.id].length-perApp[a.id].length);
+  document.getElementById('assignGrid').innerHTML=ordered.map(o=>{
     const ppl=perApp[o.id].sort((a,b)=>a.rank-b.rank);
     return `<div class="acard${ppl.length?'':' empty'}">
-      <div class="ah"><span class="ic">${o.ico}</span>${o.name}</div>
+      <div class="ah"><span class="ic">${o.ico}</span>${o.name}${ppl.length?` <span style="opacity:.55;font-size:12px">· ${ppl.length} builder${ppl.length>1?'s':''}</span>`:''}</div>
       ${ppl.length? ppl.map(p=>`<div class="assignee"><span class="who">${esc(p.name)}</span><span class="got ${gotCls[p.rank+1]}">${gotLbl(p.rank)}</span></div>`).join('')
-        : '<div class="none">— no builder assigned —</div>'}
+        : '<div class="none">— not building —</div>'}
     </div>`;
   }).join('');
   document.getElementById('assignWrap').classList.add('open');
