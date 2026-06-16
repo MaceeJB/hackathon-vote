@@ -120,8 +120,11 @@
   .got2{background:linear-gradient(135deg,#dfe6ff,#b6c2e0);color:#1c2440}
   .got3{background:linear-gradient(135deg,#ffb27a,#e8804f);color:#3a1a00}
   .got0{background:#ffffff22;color:var(--muted)}
-  .moveSel{background:#ffffff10;color:var(--text);border:1px solid var(--card-border);border-radius:7px;padding:3px 5px;font-size:11.5px;max-width:120px;cursor:pointer}
+  .moveSel{background:#2a2750;color:var(--text);border:1px solid var(--card-border);border-radius:7px;padding:3px 5px;font-size:11.5px;max-width:120px;cursor:pointer}
   .moveSel:hover{border-color:var(--accent)}
+  /* Native option list defaults to a white background on Windows — force readable dark-on-light contrast. */
+  .moveSel option{background:#24243e;color:#f5f7ff}
+  .moveSel option:checked{background:var(--accent4);color:#fff}
   .teamtag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;white-space:nowrap;margin-left:6px}
   .teamtag.ok{background:#06d6a033;color:#06d6a0}
   .teamtag.bad{background:#ef476f33;color:#ff6b93}
