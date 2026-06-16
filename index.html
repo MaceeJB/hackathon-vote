@@ -120,6 +120,11 @@
   .got2{background:linear-gradient(135deg,#dfe6ff,#b6c2e0);color:#1c2440}
   .got3{background:linear-gradient(135deg,#ffb27a,#e8804f);color:#3a1a00}
   .got0{background:#ffffff22;color:var(--muted)}
+  .moveSel{background:#ffffff10;color:var(--text);border:1px solid var(--card-border);border-radius:7px;padding:3px 5px;font-size:11.5px;max-width:120px;cursor:pointer}
+  .moveSel:hover{border-color:var(--accent)}
+  .teamtag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;white-space:nowrap;margin-left:6px}
+  .teamtag.ok{background:#06d6a033;color:#06d6a0}
+  .teamtag.bad{background:#ef476f33;color:#ff6b93}
   .acard .none{font-size:12.5px;color:var(--muted);font-style:italic}
   .roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:14px}
   .rcard{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px}
@@ -231,9 +236,12 @@
     <div class="assignWrap" id="assignWrap">
       <div class="assignHead">
         <h2 class="sectionTitle" style="margin:0">🎯 Suggested build assignments</h2>
-        <button class="btn ghost" style="font-size:12px;padding:7px 12px" onclick="document.getElementById('assignWrap').classList.remove('open')">✕ Hide</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost" style="font-size:12px;padding:7px 12px" onclick="resetAssignments()">↺ Reset to suggested</button>
+          <button class="btn ghost" style="font-size:12px;padding:7px 12px" onclick="document.getElementById('assignWrap').classList.remove('open')">✕ Hide</button>
+        </div>
       </div>
-      <div class="hint" style="margin-bottom:8px">Everyone is placed on their 🥇 or 🥈 pick, in teams of 2–3 builders. Some apps won't get built — that's expected. Tweak by hand as you see fit.</div>
+      <div class="hint" style="margin-bottom:8px">Everyone starts on their 🥇 or 🥈 pick, in teams of 2–3. <b>To move someone</b>, use the dropdown next to their name — each app shows their rank for it (🥇/🥈/🥉), and the team-size and pick tallies update live. <b>↺ Reset</b> restores the suggested plan.</div>
       <div class="assignSummary" id="assignSummary"></div>
       <div class="assignGrid" id="assignGrid"></div>
     </div>
@@ -493,12 +501,13 @@ function renderResults(replay){
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 /* ---------- assignment optimizer (constrained: 1st/2nd choice, teams of 2–3) ---------- */
+const ASSIGN_MIN=2, ASSIGN_MAX=3;
+let ASSIGN_STATE=null;   // {votes:[{name,picks}], appOf:[appId per voter]} — the live, hand-editable plan
+
 function suggestAssignments(){
   const votes=loadVotes();
   if(votes.length===0){toast('No votes to assign yet');return;}
-  const n=votes.length;
-  const MIN=2, MAX=3;        // every app that gets built has 2–3 builders…
-  const PENALTY=1000;        // …and everyone should land on their 1st or 2nd pick.
+  const n=votes.length, MIN=ASSIGN_MIN, MAX=ASSIGN_MAX, PENALTY=1000;
 
   // Each builder may only be placed on a pick they ranked. We prefer their 1st
   // (cost 0) over their 2nd (cost 1). Falling to a 3rd pick, or leaving an app with
@@ -529,15 +538,8 @@ function suggestAssignments(){
   }
   search(0,0);
 
-  const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
-  const tallyGot=[0,0,0,0];                              // [off,1st,2nd,3rd]; off stays 0 here
-  if(best) votes.forEach((v,i)=>{
-    const appId=best[i], rank=v.picks.indexOf(appId);
-    perApp[appId].push({name:v.name,rank});
-    tallyGot[rank+1]++;
-  });
-
   if(!best){
+    ASSIGN_STATE=null;
     document.getElementById('assignSummary').innerHTML=
       `<div class="s">⚠️ Can't place ${n} builders into teams of ${MIN}–${MAX} on just 9 apps — too many people, or not enough overlapping picks.</div>`;
     document.getElementById('assignGrid').innerHTML='';
@@ -545,34 +547,67 @@ function suggestAssignments(){
     document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
     return;
   }
+  ASSIGN_STATE={votes, appOf:best.slice()};
+  renderAssignments();
+  document.getElementById('assignWrap').classList.add('open');
+  document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
+  toast('Suggested a plan for '+n+' builders — use the dropdowns to adjust');
+}
 
+// Move one builder to a different app, then re-check the rules live.
+function moveAssignee(voteIdx, newAppId){
+  if(!ASSIGN_STATE) return;
+  ASSIGN_STATE.appOf[voteIdx]=newAppId;
+  renderAssignments();   // no re-scroll — keep the meeting's eyes where they are
+}
+// Throw away hand edits and recompute the optimal suggestion.
+function resetAssignments(){ suggestAssignments(); toast('Reset to the suggested plan'); }
+
+// Render the current (possibly hand-edited) plan with live tallies and rule flags.
+function renderAssignments(){
+  if(!ASSIGN_STATE) return;
+  const {votes, appOf}=ASSIGN_STATE, MIN=ASSIGN_MIN, MAX=ASSIGN_MAX;
+  const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
+  let firsts=0,seconds=0,thirds=0,offb=0;
+  votes.forEach((v,i)=>{
+    const rank=v.picks.indexOf(appOf[i]);
+    perApp[appOf[i]].push({i, name:v.name, rank, picks:v.picks});
+    if(rank===0)firsts++; else if(rank===1)seconds++; else if(rank===2)thirds++; else offb++;
+  });
   const builtIds=OPTIONS.filter(o=>perApp[o.id].length).map(o=>o.id);
-  const top2=tallyGot[1]+tallyGot[2];
   const undersized=builtIds.filter(id=>perApp[id].length<MIN).length;
-  const thirds=tallyGot[3];
-  const allGood = undersized===0 && thirds===0;
+  const oversized=builtIds.filter(id=>perApp[id].length>MAX).length;
+  const clean = undersized===0 && oversized===0 && thirds===0 && offb===0;
   document.getElementById('assignSummary').innerHTML=`
-    <div class="s">${allGood?'✅ everyone on their 🥇 or 🥈':'⚠️ best possible (some rules bent)'}</div>
-    <div class="s">🥇 got 1st: <b>${tallyGot[1]}</b></div>
-    <div class="s">🥈 got 2nd: <b>${tallyGot[2]}</b></div>
-    <div class="s"><b>${builtIds.length}</b> apps building · teams of ${MIN}–${MAX}</div>
-    ${thirds?`<div class="s">⚠️ had to use 🥉 3rd pick: <b>${thirds}</b></div>`:''}
-    ${undersized?`<div class="s">⚠️ teams under ${MIN}: <b>${undersized}</b></div>`:''}`;
+    <div class="s">${clean?'✅ all rules met':'⚠️ check the ⚠️ flags'}</div>
+    <div class="s">🥇 1st: <b>${firsts}</b></div>
+    <div class="s">🥈 2nd: <b>${seconds}</b></div>
+    ${thirds?`<div class="s">⚠️ 🥉 3rd pick: <b>${thirds}</b></div>`:''}
+    ${offb?`<div class="s">⚠️ off-ballot: <b>${offb}</b></div>`:''}
+    <div class="s"><b>${builtIds.length}</b> apps building</div>
+    ${undersized?`<div class="s">⚠️ teams under ${MIN}: <b>${undersized}</b></div>`:''}
+    ${oversized?`<div class="s">⚠️ teams over ${MAX}: <b>${oversized}</b></div>`:''}`;
   const gotCls=['got0','got1','got2','got3'];
-  const gotLbl=r=>['🥇 their #1','🥈 their #2','🥉 their #3'][r];
+  const rankLbl=r=>r===-1?'↪️ off-ballot':['🥇 their #1','🥈 their #2','🥉 their #3'][r];
+  const rankTag=r=>r===-1?'(not ranked)':['(🥇 1st)','(🥈 2nd)','(🥉 3rd)'][r];
   // Show apps being built first (largest teams first), unbuilt apps last.
   const ordered=[...OPTIONS].sort((a,b)=>perApp[b.id].length-perApp[a.id].length);
   document.getElementById('assignGrid').innerHTML=ordered.map(o=>{
     const ppl=perApp[o.id].sort((a,b)=>a.rank-b.rank);
-    return `<div class="acard${ppl.length?'':' empty'}">
-      <div class="ah"><span class="ic">${o.ico}</span>${o.name}${ppl.length?` <span style="opacity:.55;font-size:12px">· ${ppl.length} builder${ppl.length>1?'s':''}</span>`:''}</div>
-      ${ppl.length? ppl.map(p=>`<div class="assignee"><span class="who">${esc(p.name)}</span><span class="got ${gotCls[p.rank+1]}">${gotLbl(p.rank)}</span></div>`).join('')
+    const cnt=ppl.length;
+    const tag = cnt? `<span class="teamtag ${(cnt<MIN||cnt>MAX)?'bad':'ok'}">${cnt} builder${cnt>1?'s':''}${cnt<MIN?' ⚠ need '+MIN:cnt>MAX?' ⚠ over '+MAX:' ✓'}</span>`:'';
+    return `<div class="acard${cnt?'':' empty'}">
+      <div class="ah"><span class="ic">${o.ico}</span>${o.name}${tag}</div>
+      ${cnt? ppl.map(p=>`<div class="assignee">
+          <span class="who">${esc(p.name)}</span>
+          <span class="got ${gotCls[p.rank+1]}">${rankLbl(p.rank)}</span>
+          <select class="moveSel" title="Move ${esc(p.name)} to another app" onchange="moveAssignee(${p.i}, +this.value)">
+            ${OPTIONS.map(a=>`<option value="${a.id}" ${a.id===o.id?'selected':''}>${a.name} ${rankTag(p.picks.indexOf(a.id))}</option>`).join('')}
+          </select>
+        </div>`).join('')
         : '<div class="none">— not building —</div>'}
     </div>`;
   }).join('');
-  document.getElementById('assignWrap').classList.add('open');
-  document.getElementById('assignWrap').scrollIntoView({behavior:'smooth',block:'start'});
-  toast('Assignments suggested for '+n+' builders');
 }
 function buildPodium(top,max){
   const podium=document.getElementById('podium');
