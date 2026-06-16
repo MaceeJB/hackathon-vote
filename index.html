@@ -233,7 +233,7 @@
         <h2 class="sectionTitle" style="margin:0">🎯 Suggested build assignments</h2>
         <button class="btn ghost" style="font-size:12px;padding:7px 12px" onclick="document.getElementById('assignWrap').classList.remove('open')">✕ Hide</button>
       </div>
-      <div class="hint" style="margin-bottom:8px">A conflict-free starting point — each person gets the highest-ranked app they could, with builders spread across different apps. Tweak by hand as you see fit.</div>
+      <div class="hint" style="margin-bottom:8px">A starting point that gives as many people as possible their 🥇 or 🥈 pick — apps can end up with several builders or none. Tweak by hand as you see fit.</div>
       <div class="assignSummary" id="assignSummary"></div>
       <div class="assignGrid" id="assignGrid"></div>
     </div>
@@ -242,7 +242,7 @@
     <div class="rows" id="rows"></div>
 
     <h2 class="sectionTitle" id="rosterTitle" style="display:none">🧑‍💻 Who wants to build what</h2>
-    <div class="hint" id="rosterHint" style="display:none">Use this to assign builders — each name shows the rank that person gave the app (🥇/🥈/🥉). Spread people across apps so you don't get duplicates.</div>
+    <div class="hint" id="rosterHint" style="display:none">Use this to assign builders — each name shows the rank that person gave the app (🥇/🥈/🥉). Lean toward giving people their 🥇 or 🥈 pick; it's fine if some apps end up with several builders and others with none.</div>
     <div class="roster" id="roster"></div>
 
     <h2 class="sectionTitle" id="ballotTitle" style="display:none">📇 Each exec's ballot</h2>
@@ -519,16 +519,22 @@ function suggestAssignments(){
   const votes=loadVotes();
   if(votes.length===0){toast('No votes to assign yet');return;}
   const n=votes.length;
-  const base=Math.floor(n/OPTIONS.length);
-  const cap=base+1;
+  // Coverage is no longer forced: give each app enough slots to take everyone,
+  // so we never push someone to a worse choice just to fill an empty app.
+  const cap=n;
   const colApp=[];
   OPTIONS.forEach(o=>{for(let k=0;k<cap;k++)colApp.push({id:o.id,slot:k});});
-  const RANK=[0,3,6];
-  const UNWANTED=30, SPREAD=12;
+  // Priority: everyone's 1st or 2nd choice. Big gaps before 3rd/off-ballot make
+  // rank the thing we minimize first; spreading is only a tie-breaker now.
+  const RANK=[0,1,20];   // 1st, 2nd, 3rd
+  const UNWANTED=400;    // not on their ballot at all — last resort
+  // M is larger than any possible total spread penalty (max sum of slots = n(n-1)/2 < n²),
+  // so rank cost always dominates and slot only breaks ties among equal-rank solutions.
+  const M=n*n+1;
   const cost=votes.map(v=>colApp.map(c=>{
     const r=v.picks.indexOf(c.id);
     const b=r===-1?UNWANTED:RANK[r];
-    return b + c.slot*SPREAD;
+    return b*M + c.slot;
   }));
   const assign=hungarian(cost);
   const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
@@ -539,13 +545,15 @@ function suggestAssignments(){
     perApp[appId].push({name:v.name,rank});
     tallyGot[rank===-1?0:rank+1]++;
   });
+  const top2=tallyGot[1]+tallyGot[2];
+  const pct=Math.round(top2/n*100);
   document.getElementById('assignSummary').innerHTML=`
-    <div class="s"><b>${n}</b> builders placed</div>
+    <div class="s"><b>${top2}</b>/${n} got their 🥇 or 🥈 (<b>${pct}%</b>)</div>
     <div class="s">🥇 got 1st: <b>${tallyGot[1]}</b></div>
     <div class="s">🥈 got 2nd: <b>${tallyGot[2]}</b></div>
     <div class="s">🥉 got 3rd: <b>${tallyGot[3]}</b></div>
     ${tallyGot[0]?`<div class="s">↪️ off-ballot: <b>${tallyGot[0]}</b></div>`:''}
-    <div class="s">apps used: <b>${OPTIONS.filter(o=>perApp[o.id].length).length}</b>/9</div>`;
+    <div class="s">apps covered: <b>${OPTIONS.filter(o=>perApp[o.id].length).length}</b>/9 <span style="opacity:.6">(coverage is secondary)</span></div>`;
   const gotCls=['got0','got1','got2','got3'];
   const gotLbl=r=>r===-1?'↪️ off-ballot':['🥇 their #1','🥈 their #2','🥉 their #3'][r];
   document.getElementById('assignGrid').innerHTML=OPTIONS.map(o=>{
