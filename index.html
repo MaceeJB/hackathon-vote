@@ -634,7 +634,7 @@ function assignmentText(){
   const perApp={}; OPTIONS.forEach(o=>perApp[o.id]=[]);
   votes.forEach((v,i)=>perApp[appOf[i]].push({name:v.name, rank:v.picks.indexOf(appOf[i])}));
   const built=OPTIONS.filter(o=>perApp[o.id].length);
-  const out=['Hackathon Build-Off — team assignments',''];
+  const out=['AI Bunker — team assignments',''];
   built.forEach(o=>{
     const ppl=perApp[o.id].sort((a,b)=>a.rank-b.rank);
     out.push(`${o.name} (${ppl.length} builder${ppl.length>1?'s':''}): ${ppl.map(p=>p.name).join(', ')}`);
@@ -660,7 +660,7 @@ function copyAssignments(){
 }
 function emailAllAssignments(){
   if(!ASSIGN_STATE){toast('Suggest assignments first');return;}
-  window.location.href='mailto:?subject='+encodeURIComponent('Hackathon Build-Off — team assignments')
+  window.location.href='mailto:?subject='+encodeURIComponent('AI Bunker — team assignments')
     +'&body='+encodeURIComponent(assignmentText());
 }
 function teamsAssignments(){
@@ -674,8 +674,8 @@ function emailPerson(voteIdx){
   const {votes, appOf}=ASSIGN_STATE, v=votes[voteIdx], appId=appOf[voteIdx];
   const app=OPTIONS.find(o=>o.id===appId);
   const mates=votes.filter((x,i)=>appOf[i]===appId && i!==voteIdx).map(x=>x.name);
-  const subject='Your Hackathon Build-Off assignment: '+app.name;
-  const body='Hi '+v.name+",\n\nYou're building "+app.name+' for the Hackathon Build-Off.'
+  const subject='Your AI Bunker assignment: '+app.name;
+  const body='Hi '+v.name+",\n\nYou're building "+app.name+' for the AI Bunker.'
     +(mates.length?'\n\nYour teammates: '+mates.join(', ')+'.':'')
     +"\n\nLet's go!";
   window.location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
