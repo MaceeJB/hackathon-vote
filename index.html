@@ -458,7 +458,6 @@ function renderResults(replay){
   document.getElementById('stats').innerHTML=`
     <div class="stat"><div class="v">${votes.length}</div><div class="l">Execs voted</div></div>
     <div class="stat"><div class="v">${votes.length*6}</div><div class="l">Points distributed</div></div>
-    <div class="stat"><div class="v">${arr[0]&&arr[0].pts?arr[0].ico:'—'}</div><div class="l">Current leader</div></div>
     <div class="stat"><div class="v">9</div><div class="l">Apps in the running</div></div>`;
 
   if(votes.length===0){
