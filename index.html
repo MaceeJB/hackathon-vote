@@ -81,15 +81,6 @@
   .stat .v{font-size:30px;font-weight:800;color:var(--accent)}
   .stat .l{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
 
-  .podium{display:flex;align-items:flex-end;justify-content:center;gap:18px;margin:10px 0 34px;min-height:230px}
-  .pod{width:200px;text-align:center}
-  .pod .medal{font-size:42px}
-  .pod .pname{font-size:14px;font-weight:700;margin:6px 0 8px;min-height:38px;display:flex;align-items:center;justify-content:center;line-height:1.2}
-  .pod .bar{border-radius:14px 14px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:10px;font-weight:800;font-size:20px;color:#1a1430;transition:height 1s cubic-bezier(.2,.8,.2,1)}
-  .pod.first .bar{background:linear-gradient(180deg,#ffd700,#ffae00)}
-  .pod.second .bar{background:linear-gradient(180deg,#e6ecff,#aab6da)}
-  .pod.third .bar{background:linear-gradient(180deg,#ffc093,#e8804f)}
-
   .rows{display:flex;flex-direction:column;gap:10px}
   .row{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:12px 16px}
   .row .rk{font-size:16px;font-weight:800;color:var(--muted);width:28px;text-align:center}
@@ -262,7 +253,6 @@
       </div>
     </div>
 
-    <div class="podium" id="podium"></div>
     <div class="rows" id="rows"></div>
 
     <h2 class="sectionTitle" id="rosterTitle" style="display:none">🧑‍💻 Who wants to build what</h2>
@@ -461,7 +451,6 @@ function renderResults(replay){
     <div class="stat"><div class="v">9</div><div class="l">Apps in the running</div></div>`;
 
   if(votes.length===0){
-    document.getElementById('podium').innerHTML='';
     document.getElementById('rows').innerHTML='<div class="empty">No votes yet. Share the link and cast the first one!</div>';
     ['rosterTitle','rosterHint','ballotTitle'].forEach(id=>document.getElementById(id).style.display='none');
     document.getElementById('roster').innerHTML='';
@@ -469,9 +458,6 @@ function renderResults(replay){
     return;
   }
   ['rosterTitle','rosterHint','ballotTitle'].forEach(id=>document.getElementById(id).style.display='');
-
-  const top=arr.slice(0,3);
-  buildPodium(top,max);
 
   document.getElementById('rows').innerHTML=arr.map((o,i)=>`
     <div class="row">
@@ -765,21 +751,6 @@ function downloadGraphic(){
   if(!ASSIGN_STATE){toast('Suggest assignments first');return;}
   const cv=assignmentCanvas(); if(cv) cv.toBlob(blob=>{saveBlob_(blob);toast('Graphic saved as PNG');},'image/png');
 }
-function buildPodium(top,max){
-  const podium=document.getElementById('podium');
-  if(top.length===0){podium.innerHTML='';return;}
-  const slots=[{o:top[1],cls:'second',medal:'🥈',h:155},{o:top[0],cls:'first',medal:'🥇',h:215},{o:top[2],cls:'third',medal:'🥉',h:125}];
-  podium.innerHTML=slots.filter(s=>s.o).map(s=>`
-    <div class="pod ${s.cls}">
-      <div class="medal">${s.medal}</div>
-      <div class="pname">${s.o.ico} ${s.o.name}</div>
-      <div class="bar" style="height:0px" data-h="${s.o.pts>0?s.h:40}">${s.o.pts}</div>
-    </div>`).join('');
-  requestAnimationFrame(()=>{
-    podium.querySelectorAll('.bar').forEach(b=>{requestAnimationFrame(()=>b.style.height=b.dataset.h+'px');});
-  });
-}
-
 /* ---------- CSV export ---------- */
 function exportCSV(){
   const votes=loadVotes();
